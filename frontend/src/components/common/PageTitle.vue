@@ -1,0 +1,1 @@
+<script setup lang="ts">defineProps<{chapter:string;title:string;description:string}>()</script><template><header class="page-title"><p class="eyebrow">FIELD STUDY / {{chapter}}</p><h1>{{title}}</h1><p>{{description}}</p></header></template>

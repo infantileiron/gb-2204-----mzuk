@@ -1,0 +1,1 @@
+<script setup lang="ts">defineProps<{error:string}>();const reload=()=>window.location.reload()</script><template><div v-if="error" class="notice" role="alert">{{error}}<button @click="reload()">刷新重试</button></div></template>

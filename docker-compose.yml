@@ -1,0 +1,78 @@
+name: ${COMPOSE_PROJECT_NAME:-coverage-map}
+services:
+  db:
+    image: mysql:8.4
+    container_name: ${COMPOSE_PROJECT_NAME:-coverage-map}-db
+    environment:
+      MYSQL_DATABASE: coverage_map
+      MYSQL_USER: patrol
+      MYSQL_PASSWORD: ${DB_PASSWORD:-patrol_demo_password}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-patrol_root_demo_password}
+    ports: ["${DB_PORT:-17713}:3306"]
+    volumes: ["db-data:/var/lib/mysql"]
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u patrol -p$$MYSQL_PASSWORD --silent"]
+      interval: 5s
+      timeout: 4s
+      retries: 30
+      start_period: 15s
+  redis:
+    image: redis:7.4-alpine
+    container_name: ${COMPOSE_PROJECT_NAME:-coverage-map}-redis
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes: ["redis-data:/data"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+  backend:
+    build: ./backend
+    container_name: ${COMPOSE_PROJECT_NAME:-coverage-map}-backend
+    environment: &backend-env
+      DATABASE_URL: mysql://patrol:${DB_PASSWORD:-patrol_demo_password}@db:3306/coverage_map
+      REDIS_URL: redis://redis:6379/0
+      JWT_SECRET: ${JWT_SECRET:-coverage-map-demo-change-before-public-use}
+      SEED_DEMO: ${SEED_DEMO:-true}
+      TASK_MODE: redis
+      ARTIFACT_DIR: /artifacts
+    ports: ["${BACKEND_PORT:-19213}:8000"]
+    volumes: ["shared-artifacts:/artifacts"]
+    depends_on:
+      db: {condition: service_healthy}
+      redis: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health',timeout=3)"]
+      interval: 5s
+      timeout: 4s
+      retries: 30
+      start_period: 15s
+  worker:
+    build: ./backend
+    container_name: ${COMPOSE_PROJECT_NAME:-coverage-map}-worker
+    command: ["python", "-m", "src.worker"]
+    environment: *backend-env
+    volumes: ["shared-artifacts:/artifacts"]
+    depends_on:
+      db: {condition: service_healthy}
+      redis: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import time; from pathlib import Path; assert time.time()-float(Path('/tmp/worker-heartbeat').read_text())<90"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+  frontend:
+    build: ./frontend
+    container_name: ${COMPOSE_PROJECT_NAME:-coverage-map}-frontend
+    ports: ["${FRONTEND_PORT:-18213}:80"]
+    depends_on:
+      backend: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+volumes:
+  db-data:
+  redis-data:
+  shared-artifacts:
