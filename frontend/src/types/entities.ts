@@ -1,9 +1,13 @@
 export type User={email:string;name:string;role:string};
 export type Point={site_id:string;label:string;latitude:number;longitude:number;weight:number;covered?:boolean;nearest_selected_km?:number|null};
-export type Dataset={id:string;name:string;source:string;row_count:number;total_weight:number};
+export type Dataset={id:string;name:string;source:string;row_count:number;total_weight:number;version?:number;updated_at?:string;created_at?:string};
+export type BatchCounts={accepted_rows:number;quarantined_rows:number;inserted_count:number;updated_count:number;ignored_count:number};
+export type QuarantinedRow={line_number:number;site_id:string;reason:string;raw:Record<string,string>};
+export type ImportBatch={id:string;dataset_id:string;source:string;created_at:string;status:'applied'|'quarantined';counts:BatchCounts;inserted:string[];updated:string[];ignored:{site_id:string;reason:string}[];quarantined_count:number;quarantined?:QuarantinedRow[];idempotency_key?:string|null;fingerprint?:string;duplicate?:boolean;duplicate_of?:string};
+export type DatasetImportResult=Dataset&{import_batch?:ImportBatch};
 export type Candidate={id:string;name:string;latitude:number;longitude:number;cost:number};
 export type Scenario={id:string;name:string;dataset_id:string;candidate_ids:string[];radius_km:number;budget:number;max_sites:number};
-export type CoverageResult={points:Point[];candidates:Candidate[];selected:Candidate[];selected_ids:string[];steps:{step:number;name:string;cost:number;gain_weight:number;covered_weight:number;coverage_rate:number;spent:number}[];sensitivity:{candidate_id:string;name:string;unique_weight:number;coverage_rate_without:number}[];covered_weight:number;total_weight:number;coverage_rate:number;covered_points:number;uncovered_points:number;spent:number;budget:number;radius_km:number;checksum:string;limitations:string[]};
+export type CoverageResult={points:Point[];candidates:Candidate[];selected:Candidate[];selected_ids:string[];steps:{step:number;name:string;cost:number;gain_weight:number;covered_weight:number;coverage_rate:number;spent:number}[];sensitivity:{candidate_id:string;name:string;unique_weight:number;coverage_rate_without:number}[];covered_weight:number;total_weight:number;coverage_rate:number;covered_points:number;uncovered_points:number;spent:number;budget:number;radius_km:number;checksum:string;limitations:string[];dataset_snapshot?:{dataset_id:string;version:number;row_count:number;updated_at:string}};
 export type Run={id:string;scenario_id:string;status:string;result:CoverageResult;error:string};
 export type Review={id:string;run_id:string;comment:string;status:string;reviewer:string};
 export type Report={id:string;run_id:string;review_id:string;title:string};

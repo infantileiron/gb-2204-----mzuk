@@ -7,6 +7,22 @@ class SiteDataset:
  source:str
  rows:list[dict]
  created_at:str=''
+ updated_at:str=''
+ version:int=1
+@dataclass
+class ImportBatch:
+ id:str
+ dataset_id:str
+ fingerprint:str
+ source:str
+ created_at:str
+ status:str
+ counts:dict[str,Any]
+ inserted:list[str]=field(default_factory=list)
+ updated:list[str]=field(default_factory=list)
+ ignored:list[dict]=field(default_factory=list)
+ quarantined:list[dict]=field(default_factory=list)
+ idempotency_key:str|None=None
 @dataclass
 class CandidateSite:
  id:str

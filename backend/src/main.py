@@ -8,7 +8,7 @@ from src.middlewares.errors import ErrorMiddleware
 from src.routes import auth,dataset,scenario,run,review,report,audit,candidate
 @asynccontextmanager
 async def lifespan(app):
-    repo.init_db()
+    repo.run_migrations()
     if SEED_DEMO:
         try:
             from src.services.seed import seed

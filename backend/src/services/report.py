@@ -16,7 +16,9 @@ def download(id):
  report=repo.get('reports',id);run=repo.get('runs',report['run_id']);r=run['result']
  if repo.get('reviews',report['review_id'])['status']!='approved':raise HTTPException(403,'复核未通过')
  out=io.StringIO();w=csv.writer(out)
- w.writerow(['report','radius_km','budget','spent','coverage_rate','checksum']);w.writerow([safe_cell(report['title']),r['radius_km'],r['budget'],r['spent'],r['coverage_rate'],r['checksum']])
+ snapshot=r.get('dataset_snapshot') or {}
+ w.writerow(['report','radius_km','budget','spent','coverage_rate','checksum','dataset_id','dataset_version','dataset_row_count','snapshot_updated_at'])
+ w.writerow([safe_cell(report['title']),r['radius_km'],r['budget'],r['spent'],r['coverage_rate'],r['checksum'],snapshot.get('dataset_id',''),snapshot.get('version',''),snapshot.get('row_count',''),snapshot.get('updated_at','')])
  w.writerow([]);w.writerow(['selected_id','name','latitude','longitude','cost','unique_weight','coverage_rate_without'])
  for c,s in zip(r['selected'],r['sensitivity']):w.writerow([c['id'],safe_cell(c['name']),c['latitude'],c['longitude'],c['cost'],s['unique_weight'],s['coverage_rate_without']])
  w.writerow([]);w.writerow(['site_id','label','latitude','longitude','weight','covered','nearest_selected_km'])

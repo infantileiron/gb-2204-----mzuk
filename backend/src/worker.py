@@ -3,10 +3,10 @@ from pathlib import Path
 import redis
 from src.config.settings import REDIS_URL
 from src.services.run import execute
-from src.utils.repository import init_db
+from src.utils.repository import run_migrations
 logging.basicConfig(level=logging.INFO)
 def main():
-    init_db(); client=redis.Redis.from_url(REDIS_URL)
+    run_migrations(); client=redis.Redis.from_url(REDIS_URL)
     while True:
         Path("/tmp/worker-heartbeat").write_text(str(time.time()))
         try:

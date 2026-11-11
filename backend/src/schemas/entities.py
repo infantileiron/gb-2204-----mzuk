@@ -9,6 +9,11 @@ class DatasetInput(StrictModel):
  name:str=Field(min_length=2,max_length=100)
  source:str=Field(default='patrol_demands_202611.csv',max_length=100)
  csv_text:str=Field(min_length=20,max_length=1000000)
+ idempotency_key:str|None=Field(default=None,max_length=128)
+class DatasetImportInput(StrictModel):
+ source:str=Field(default='patrol_supplement_202612.csv',max_length=100)
+ csv_text:str=Field(min_length=20,max_length=1000000)
+ idempotency_key:str|None=Field(default=None,max_length=128)
 class RenameDataset(StrictModel):
  name:str=Field(min_length=2,max_length=100)
 class CandidateInput(StrictModel):

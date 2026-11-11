@@ -6,7 +6,7 @@
 
 巡护队原来在纸图上圈半径、用Excel加总样点，距离口径不一致、预算分配缺少量化依据、边缘需求常年漏覆。本工程接收上游模拟需求CSV与候选点勘测表，替代覆盖计算、预算推演及审批归档，下游队长据此安排现场踏勘。所有坐标/成本/需求为模拟，不包含真实敏感巡护路线。
 
-六个核心实体：SiteDataset巡护需求、CandidateSite候选点、CoverageScenario预算方案、CoverageRun覆盖运行、DecisionReview决策复核、Report归档报告。六页：覆盖图册、巡护需求、候选点位、预算推演、覆盖与敏感性、决策归档。共享SurveyMap与CoverageSummary同时用于总览和运行结果。
+六个核心实体：SiteDataset巡护需求、CandidateSite候选点、CoverageScenario预算方案、CoverageRun覆盖运行、DecisionReview决策复核、Report归档报告；补测导入另由ImportBatch批次留痕支撑。六页：覆盖图册、巡护需求、候选点位、预算推演、覆盖与敏感性、决策归档。共享SurveyMap与CoverageSummary同时用于总览和运行结果。
 
 ## 启动
 
@@ -28,8 +28,8 @@ docker compose exec -T backend python -m scripts.seed_demo
 
 ## 一天的工作剧本
 
-1. 08:30 分析员登录，检查 `patrol_demands_202611.csv` 的180个需求点和需求权重。
-2. 08:35 核查经纬度单位及样点编号，确认四个湿地区域均有数据。
+1. 08:30 分析员登录，检查 `patrol_demands_202611.csv` 的180个需求点和需求权重（含采测时间列）。
+2. 08:35 核查经纬度单位及样点编号，确认四个湿地区域均有数据；后续补测在原需求上追加，按采测时间裁决并核对批次的新增/更新/忽略/隔离计数。
 3. 08:45 对照24个候选点的十进制度坐标与1/2/3万元成本，补录踏勘候选。
 4. 09:00 建立覆盖半径4.5km、预算9万元、最多6点的方案，可逐个排除不可用候选。
 5. 09:05 运行，Redis接收任务，独立worker计算距离矩阵、预算贪心选择与移除敏感性，结果持久化MySQL。
@@ -39,9 +39,19 @@ docker compose exec -T backend python -m scripts.seed_demo
 
 ## 两类计算与失败态
 
-Haversine距离以地球平均半径6371.0088km计算。纬度/经度先转弧度，`a=sin²(Δφ/2)+cosφ₁cosφ₂sin²(Δλ/2)`，`d=2R atan2(√a,√(1-a))`。a截断至[0,1]防舍入溢出，自然支持跨±180°经线。点权重非负、总权重大于0，坐标有限且纬度[-90,90]/经度[-180,180]，成本为正有限数。最多5000需求点和100候选，CSV重复编号拒绝。
+Haversine距离以地球平均半径6371.0088km计算。纬度/经度先转弧度，`a=sin²(Δφ/2)+cosφ₁cosφ₂sin²(Δλ/2)`，`d=2R atan2(√a,√(1-a))`。a截断至[0,1]防舍入溢出，自然支持跨±180°经线。点权重非负、总权重大于0，坐标有限且纬度[-90,90]/经度[-180,180]，成本为正有限数。最多5000需求点和100候选，同批CSV重复编号进隔离区而非整批拒绝。
 
 加权覆盖按`距离≤半径`建立集合，在剩余预算与选点上限内，每次选择`新增覆盖权重/成本`最大点；同值先看新增权重，再按ID。零增益不选。覆盖集合逐步取并集，单次运行覆盖单调不降；启发式不保证全局最优，也不承诺跨不同预算/半径的方案结果单调。零预算输出空选址与零覆盖，避免除零。移除敏感性固定其余选点，重新求覆盖并集，报告该点独有覆盖权重及移除后覆盖率，不重新优化。
+
+### 补测追加、时间裁决与隔离重放
+
+补测不再另建文件，而是在“巡护需求”页选定原需求后追加。导入CSV必须含`site_id,label,latitude,longitude,weight,surveyed_at`六列，`surveyed_at`为采测时间（支持`Z`后缀，无时区按UTC处理）。同编号按采测时间裁决：仅当补测记录晚于现行记录才整体更新；更早或同刻的晚到记录计入“忽略”，不覆盖现行权重，旧数据不会因为晚到而回退。同批内重复编号进隔离区，不静默取后值。
+
+每次导入生成ImportBatch批次，页面可核对每批新增、更新、忽略的编号与计数，以及隔离行的行号和原因（坐标越界、权重非有限/为负、时间无法解析、编号或名称为空、同批重复、超出5000点上限）。坏行隔离不阻断整批，已接收的好行同事务落库不丢；可下载该批隔离行CSV，修正原因后在同一需求重放导入。整批无有效行或总权重不大于0时整体拒绝、不写任何数据。
+
+重复投递两层去重：CSV内容SHA256指纹（归一化BOM与CRLF）一致，或携带相同`idempotency_key`，直接返回原批次并标注`duplicate`，不重复写入；判定范围限定在同一需求内，不同需求的相同文件互不影响。导入在单事务内持MySQL命名锁串行化，保证并发追加不丢更新。
+
+新推演始终读取该需求的最新版本（dataset带`version`与`updated_at`），运行结果内嵌完整需求快照与`dataset_snapshot`溯源；已完成运行、已批准复核和归档报告保留当时快照与SHA256，不随后续补测变化，归档CSV同时记录快照版本号。
 
 结果包括完整距离矩阵、选点序列、成本、覆盖/未覆盖样点、逐点最近选中距离、移除敏感性、输入SHA256与方法限制，写数据库并存共享产物卷。CSV与已批准的固定结果绑定，公式前缀文本做保护。
 
@@ -56,7 +66,7 @@ SVG前端地图无外部地图服务，使用局部等距近似投影及等尺�
 | 计算 | Python标准库球面几何、贪心覆盖与敏感性 |
 | 存储与异步 | MySQL8.4、Redis7.4、独立Python worker |
 
-`frontend/src/{api,stores,types,components/common,hooks,pages,router,utils,constants}` 与 `backend/src/{routes,controllers,services,models,schemas,middlewares,utils,constants,config}` 分离职责，76个有实际职责源文件。各业务表使用VARCHAR主键和LONGTEXT JSON载荷，确保完整距离矩阵超过64KB时可持久化；迁移DDL在backend/migrations/001_initial.sql。建表使用MySQL GET_LOCK避免backend/worker首次初始化争用。
+`frontend/src/{api,stores,types,components/common,hooks,pages,router,utils,constants}` 与 `backend/src/{routes,controllers,services,models,schemas,middlewares,utils,constants,config}` 分离职责，76个有实际职责源文件。各业务表使用VARCHAR主键和LONGTEXT JSON载荷，确保完整距离矩阵超过64KB时可持久化；迁移DDL在backend/migrations/001_initial.sql。建表使用MySQL GET_LOCK避免backend/worker首次初始化争用；迁移DDL按文件名顺序执行于backend/migrations（001初始表、002导入批次表），应用与worker启动时自动补齐。
 
 角色/运行/复核枚举：后端src/constants/enums.py；前端src/constants/enums.ts的roleLabels/statusLabels。地理常量后端src/constants/geometry.py，前端src/constants/enums.ts的earthRadiusKm；地图投影近似常量另见src/utils/mapProjection.ts。
 
